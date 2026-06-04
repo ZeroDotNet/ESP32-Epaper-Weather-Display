@@ -1,6 +1,6 @@
 /*
  * Weather Station for LilyGo T5 4.7 E-Paper Display
- * 
+ *
  * Features:
  * - Current weather conditions with large icon display
  * - 5-day forecast grouped by day with daily high/low temperatures
@@ -8,10 +8,10 @@
  * - Battery and WiFi signal strength indicators
  * - Low battery protection with visual warning
  * - Deep sleep power management with wake hour scheduling
- * 
+ *
  * Uses OpenWeatherMap One Call API 3.0 for weather data.
  * Time synchronization via API response (no NTP required).
- * 
+ *
  * Supports both ESP32 (5 Button dev kit) and ESP32-S3 (3 Button dev kit)
  */
 
@@ -35,55 +35,55 @@
 
 // Platform detection
 #ifdef ESP32_S3_PLATFORM
-  #define IS_ESP32_S3 true
+#define IS_ESP32_S3 true
 #else
-  #define IS_ESP32_S3 false
+#define IS_ESP32_S3 false
 #endif
 
 #ifdef ESP32_PLATFORM
-  #define IS_ESP32 true
+#define IS_ESP32 true
 #else
-  #define IS_ESP32 false
+#define IS_ESP32 false
 #endif
 
 // Check for PSRAM - required for ESP32-S3
 #if IS_ESP32_S3
-  #ifndef BOARD_HAS_PSRAM
-  #error "Please enable PSRAM! PlatformIO -> board_build.psram_type = opi"
-  #endif
+#ifndef BOARD_HAS_PSRAM
+#error "Please enable PSRAM! PlatformIO -> board_build.psram_type = opi"
+#endif
 #endif
 
-#define SCREEN_WIDTH   EPD_WIDTH
-#define SCREEN_HEIGHT  EPD_HEIGHT
+#define SCREEN_WIDTH EPD_WIDTH
+#define SCREEN_HEIGHT EPD_HEIGHT
 
 // Color definitions for e-paper display (grayscale values)
-#define White         0xFF
-#define LightGrey     0xBB
-#define Grey          0x88
-#define DarkGrey      0x44
-#define Black         0x00
+#define White 0xFF
+#define LightGrey 0xBB
+#define Grey 0x88
+#define DarkGrey 0x44
+#define Black 0x00
 
 // Program variables
-#define max_hourly_readings 48  // One Call API 3.0 provides 48 hours of hourly forecasts
-#define max_daily_readings 8    // One Call API 3.0 provides 8 days of daily forecasts
+#define max_hourly_readings 48 // One Call API 3.0 provides 48 hours of hourly forecasts
+#define max_daily_readings 8   // One Call API 3.0 provides 8 days of daily forecasts
 
 // Forecast arrays - use static allocation for ESP32, heap allocation for ESP32-S3
 #if IS_ESP32_S3
 // ESP32-S3: Allocate on heap to avoid static initialization crash
-Forecast_record_type  *WxConditions = nullptr;
-Forecast_record_type  *WxHourlyForecast = nullptr;  
-Forecast_record_type  *WxDailyForecast = nullptr;
+Forecast_record_type *WxConditions = nullptr;
+Forecast_record_type *WxHourlyForecast = nullptr;
+Forecast_record_type *WxDailyForecast = nullptr;
 #else
 // ESP32: Use static allocation
-Forecast_record_type  WxConditions[1];
-Forecast_record_type  WxHourlyForecast[max_hourly_readings];  // Hourly forecasts for 24-hour graph
-Forecast_record_type  WxDailyForecast[max_daily_readings];    // Daily forecasts for 5-day display
+Forecast_record_type WxConditions[1];
+Forecast_record_type WxHourlyForecast[max_hourly_readings]; // Hourly forecasts for 24-hour graph
+Forecast_record_type WxDailyForecast[max_daily_readings];   // Daily forecasts for 5-day display
 #endif
 
 // Runtime variables (not configuration - these change during execution)
-long StartTime       = 0;  // Timestamp when device woke up
-long SleepTimer      = 0;  // Calculated sleep duration in seconds
-long Delta           = 30; // RTC speed compensation offset (seconds)
+long StartTime = 0;  // Timestamp when device woke up
+long SleepTimer = 0; // Calculated sleep duration in seconds
+long Delta = 30;     // RTC speed compensation offset (seconds)
 
 // Fonts
 #include "OpenSans8B.h"
@@ -96,13 +96,13 @@ long Delta           = 30; // RTC speed compensation offset (seconds)
 #include "sunset.h"
 
 // Global variables shared with renderer
-GFXfont  currentFont;
+GFXfont currentFont;
 uint8_t *framebuffer;
 
-String  Time_str = "--:--:--";
-String  Date_str = "-- --- ----";
-int     wifi_signal, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0, EventCnt = 0, vref = 1100;
-int     globalTimezoneOffset = 0;  // Timezone offset in seconds (positive = east of UTC)
+String Time_str = "--:--:--";
+String Date_str = "-- --- ----";
+int wifi_signal, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0, EventCnt = 0, vref = 1100;
+int globalTimezoneOffset = 0; // Timezone offset in seconds (positive = east of UTC)
 
 // RTC memory variable to track if low battery screen has been shown
 // This persists across deep sleep
@@ -113,11 +113,11 @@ void BeginSleep();
 uint8_t StartWiFi();
 void StopWiFi();
 void InitialiseSystem();
-bool DecodeWeather(WiFiClient& json);
-int obtainWeatherData(WiFiClient & client); // Returns: 0 = success, 1 = API key invalid (401), 2 = other error
+bool DecodeWeather(WiFiClient &json);
+int obtainWeatherData(WiFiClient &client); // Returns: 0 = success, 1 = API key invalid (401), 2 = other error
 boolean UpdateLocalTime();
 void SetRTCTimeFromAPI(time_t apiTime, int timezoneOffset);
-void DisplayWeather();  // Main display function - adapted to use GUI layout
+void DisplayWeather(); // Main display function - adapted to use GUI layout
 String ConvertUnixTime(int unix_time);
 uint32_t readBatteryVoltage();
 
@@ -126,58 +126,62 @@ uint32_t readBatteryVoltage();
  * Calculates sleep duration to align with minute boundaries based on SleepDuration.
  * The Delta offset compensates for ESP32 RTC drift.
  */
-void BeginSleep() {
+void BeginSleep()
+{
   epd_poweroff_all();
   UpdateLocalTime();
-  
+
   // Calculate sleep duration: align to next SleepDuration minute boundary
   // Example: if SleepDuration=60 and current time is 14:23:45, sleep until 15:00:00
   int minutesUntilNext = settings.SleepDuration - (CurrentMin % settings.SleepDuration);
   int secondsUntilNext = (minutesUntilNext * 60) - CurrentSec;
   SleepTimer = secondsUntilNext + Delta; // Add compensation offset
-  
+
   esp_sleep_enable_timer_wakeup(SleepTimer * 1000000LL); // Convert to microseconds
-  
+
   // Serial output (non-blocking, only if available)
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println("Awake for : " + String((millis() - StartTime) / 1000.0, 3) + "-secs");
     Serial.println("Entering " + String(SleepTimer) + " (secs) of sleep time");
     Serial.println("Starting deep-sleep period...");
     Serial.flush();
   }
 #endif
-  delay(50);  // Brief delay
-  
+  delay(50); // Brief delay
+
   esp_deep_sleep_start();
 }
 
 /**
  * Set ESP32 RTC time from OpenWeatherMap API response.
- * 
+ *
  * The API provides time as a Unix timestamp (UTC). We store UTC in the RTC
  * Timezone is configured from the API's timezone_offset to convert UTC to local time.
- * 
+ *
  * @param apiTime Unix timestamp from API (UTC)
  * @param timezoneOffset Timezone offset in seconds from UTC (positive = east of UTC, negative = west of UTC)
  */
-void SetRTCTimeFromAPI(time_t apiTime, int timezoneOffset) {
+void SetRTCTimeFromAPI(time_t apiTime, int timezoneOffset)
+{
   // Store UTC time in RTC
   struct timeval tv;
   tv.tv_sec = apiTime;
   tv.tv_usec = 0;
   settimeofday(&tv, NULL);
-  
+
   // Store timezone offset globally for manual conversion
   globalTimezoneOffset = timezoneOffset;
-  
+
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println("RTC set from API time (UTC)");
     Serial.print("Timezone offset: ");
     Serial.print(timezoneOffset / 3600.0);
     Serial.println(" hours");
-    
+
     // Verify time calculation
     time_t now = time(NULL);
     struct tm *utc_tm = gmtime(&now);
@@ -194,12 +198,14 @@ void SetRTCTimeFromAPI(time_t apiTime, int timezoneOffset) {
 /**
  * Connect to WiFi network and retrieve signal strength.
  * Attempts connection twice if first attempt fails.
- * 
+ *
  * @return WiFi status (WL_CONNECTED on success)
  */
-uint8_t StartWiFi() {
+uint8_t StartWiFi()
+{
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println("\r\nWiFi Connecting to: " + String(settings.ssid));
   }
 #endif
@@ -207,10 +213,12 @@ uint8_t StartWiFi() {
   WiFi.disconnect();
   WiFi.mode(WIFI_STA); // Station mode (client)
   WiFi.begin(settings.ssid, settings.password);
-  
-  if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+
+  if (WiFi.waitForConnectResult() != WL_CONNECTED)
+  {
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.printf("WiFi connection failed, retrying...!\n");
     }
 #endif
@@ -218,19 +226,23 @@ uint8_t StartWiFi() {
     delay(500);
     WiFi.begin(settings.ssid, settings.password);
   }
-  
-  if (WiFi.waitForConnectResult() == WL_CONNECTED) {
+
+  if (WiFi.waitForConnectResult() == WL_CONNECTED)
+  {
     wifi_signal = WiFi.RSSI(); // Store signal strength before WiFi is turned off
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.println("WiFi connected at: " + WiFi.localIP().toString());
     }
 #endif
   }
-  else {
+  else
+  {
     wifi_signal = 0;
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.println("WiFi connection *** FAILED ***");
     }
 #endif
@@ -241,11 +253,13 @@ uint8_t StartWiFi() {
 /**
  * Disconnect from WiFi and power down WiFi module to save power.
  */
-void StopWiFi() {
+void StopWiFi()
+{
   WiFi.disconnect();
   WiFi.mode(WIFI_OFF);
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println("WiFi switched Off");
   }
 #endif
@@ -255,9 +269,10 @@ void StopWiFi() {
  * Initialize system components: serial, display, and framebuffer.
  * Framebuffer uses 4-bit grayscale (2 pixels per byte), hence size is width*height/2.
  */
-void InitialiseSystem() {
+void InitialiseSystem()
+{
   StartTime = millis();
-  
+
   // Initialize Serial (non-blocking - works without serial connection)
   // Don't wait for serial connection - proceed immediately
 #if DEBUG_LEVEL
@@ -266,55 +281,70 @@ void InitialiseSystem() {
   // ESP32-S3 USB CDC needs time to initialize - delay prevents hanging if no terminal connected
   delay(1000);
 #endif
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println(String(__FILE__) + "\nStarting...");
   }
 #endif
-  
+
 #if IS_ESP32_S3
   // ESP32-S3: Check PSRAM
-  if (ESP.getPsramSize() == 0) {
+  if (ESP.getPsramSize() == 0)
+  {
     // PSRAM required - enter infinite loop (will retry on next boot)
     // Don't use Serial here as it may not be available
-    while(1) { delay(1000); }
+    while (1)
+    {
+      delay(1000);
+    }
   }
-  
+
   // Allocate framebuffer
   size_t fb_size = EPD_WIDTH * EPD_HEIGHT / 2;
   framebuffer = (uint8_t *)ps_calloc(1, fb_size);
-  if (!framebuffer) {
+  if (!framebuffer)
+  {
     // Framebuffer allocation failed - enter infinite loop (will retry on next boot)
-    while(1) { delay(1000); }
+    while (1)
+    {
+      delay(1000);
+    }
   }
   memset(framebuffer, 0xFF, fb_size);
-  
+
   // Initialize settings
   initSettings();
-  
+
   // Initialize display
   epd_init();
-  
+
   // Allocate forecast arrays on heap (avoid static initialization crash)
   WxConditions = new Forecast_record_type[1];
   WxHourlyForecast = new Forecast_record_type[max_hourly_readings];
   WxDailyForecast = new Forecast_record_type[max_daily_readings];
-  
-  if (!WxConditions || !WxHourlyForecast || !WxDailyForecast) {
+
+  if (!WxConditions || !WxHourlyForecast || !WxDailyForecast)
+  {
     // Forecast array allocation failed - enter infinite loop (will retry on next boot)
-    while(1) { delay(1000); }
+    while (1)
+    {
+      delay(1000);
+    }
   }
 #else
   // ESP32: Initialize settings first
   initSettings();
-  
+
   // Initialize display
   epd_init();
-  
+
   // Allocate framebuffer: 4-bit grayscale = 2 pixels per byte
   framebuffer = (uint8_t *)ps_calloc(sizeof(uint8_t), EPD_WIDTH * EPD_HEIGHT / 2);
-  if (!framebuffer) {
+  if (!framebuffer)
+  {
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.println("Memory alloc failed!");
     }
 #endif
@@ -323,43 +353,48 @@ void InitialiseSystem() {
 #endif
 }
 
-void loop() {
+void loop()
+{
   // Empty - all work is done in setup() before entering deep sleep
 }
 
 /**
  * Check if setup mode should be activated based on button press(es).
- * 
+ *
  * ESP32 (5 Button dev kit): Buttons 2 (GPIO 35) and 4 (GPIO 39) must both be pressed
  * ESP32-S3 (3 Button dev kit): Single button (GPIO 21) must be pressed
- * 
+ *
  * @return true if setup mode should be activated
  */
-bool checkSetupModeEntry() {
+bool checkSetupModeEntry()
+{
 #if IS_ESP32_S3
   // ESP32-S3: Single button on GPIO 21
   pinMode(21, INPUT_PULLUP);
-  delay(50);  // Brief stabilization delay
-  
+  delay(50); // Brief stabilization delay
+
   // Check if button is pressed during boot (sample multiple times)
   bool buttonPressed = false;
-  for (int i = 0; i < 5; i++) {
-    if (digitalRead(21) == LOW) {
+  for (int i = 0; i < 5; i++)
+  {
+    if (digitalRead(21) == LOW)
+    {
       buttonPressed = true;
       break;
     }
     delay(50);
   }
-  
+
   return buttonPressed;
 #else
   // ESP32: Buttons 2 (GPIO 35) and 4 (GPIO 39) must both be pressed
-  pinMode(34, INPUT_PULLUP);    // Button 3 (for reference)
-  pinMode(35, INPUT_PULLUP);    // Button 2
-  pinMode(39, INPUT_PULLUP);    // Button 4
-  
+  pinMode(34, INPUT_PULLUP); // Button 3 (for reference)
+  pinMode(35, INPUT_PULLUP); // Button 2
+  pinMode(39, INPUT_PULLUP); // Button 4
+
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println("\n=== Button Status ===");
     Serial.printf("Button 2 (GPIO 35): %s\n", digitalRead(35) == HIGH ? "HIGH" : "LOW");
     Serial.printf("Button 3 (GPIO 34): %s\n", digitalRead(34) == HIGH ? "HIGH" : "LOW");
@@ -367,19 +402,19 @@ bool checkSetupModeEntry() {
     Serial.println("=== End Button Status ===\n");
   }
 #endif
-  
+
   // Check if buttons 2 and 4 are both pressed to enter setup mode
   // With pull-up resistors, pressed buttons read LOW
   bool button2Pressed = (digitalRead(35) == LOW);
   bool button4Pressed = (digitalRead(39) == LOW);
-  
+
   return (button2Pressed && button4Pressed);
 #endif
 }
 
 /**
  * Main setup function - runs once on wake from deep sleep.
- * 
+ *
  * Flow:
  * 1. Initialize serial (non-blocking)
  * 2. Check for setup mode entry button combo
@@ -391,7 +426,8 @@ bool checkSetupModeEntry() {
  * 8. Draw weather display to framebuffer and update e-paper screen
  * 9. Enter deep sleep until next wake time
  */
-void setup() {
+void setup()
+{
   // Initialize Serial (non-blocking - works without serial connection)
   // Don't call Serial.end() - just begin it once, it will work if USB is connected
 #if DEBUG_LEVEL
@@ -402,39 +438,49 @@ void setup() {
 #endif
   // Don't wait for serial connection - proceed immediately
 #endif
-  
+
   // Check for setup mode entry early - before heavy initialization
-  if (checkSetupModeEntry()) {
+  if (checkSetupModeEntry())
+  {
     // Enter setup mode
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.println("Setup mode activated");
     }
 #endif
-    
+
 #if IS_ESP32_S3
     // ESP32-S3: Initialize minimal system for setup mode
     StartTime = millis();
-    
+
     // Check PSRAM
-    if (ESP.getPsramSize() == 0) {
-      while(1) { delay(1000); }
+    if (ESP.getPsramSize() == 0)
+    {
+      while (1)
+      {
+        delay(1000);
+      }
     }
-    
+
     // Allocate framebuffer
     size_t fb_size = EPD_WIDTH * EPD_HEIGHT / 2;
     framebuffer = (uint8_t *)ps_calloc(1, fb_size);
-    if (!framebuffer) {
-      while(1) { delay(1000); }
+    if (!framebuffer)
+    {
+      while (1)
+      {
+        delay(1000);
+      }
     }
     memset(framebuffer, 0xFF, fb_size);
-    
+
     // Initialize settings (needed for setup mode)
     initSettings();
-    
+
     // Initialize display
     epd_init();
-    
+
     // Allocate forecast arrays (needed for rendering)
     WxConditions = new Forecast_record_type[1];
     WxHourlyForecast = new Forecast_record_type[max_hourly_readings];
@@ -443,84 +489,96 @@ void setup() {
     // ESP32: Initialize system normally
     InitialiseSystem();
 #endif
-    
+
     // Show setup mode screen
     epd_poweron();
     epd_clear();
     drawSetupModeScreen();
     epd_draw_grayscale_image(epd_full_screen(), framebuffer);
     epd_poweroff_all();
-    
+
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.println("Setup mode screen displayed. Starting WiFi AP and web server...");
     }
 #endif
-    
+
     // Run setup mode with WiFi AP and web server
     runSetupMode();
     return; // Exit setup() early
   }
-  
+
   // Normal boot - initialize system
   InitialiseSystem();
-  
+
   // Check battery voltage first - if low, show message once and sleep
   uint32_t batVoltage = readBatteryVoltage();
   float voltage = (batVoltage > 0) ? (batVoltage / 1000.0) : 0.0;
-  
-  if (voltage > 0 && voltage <= 3.2) {
+
+  if (voltage > 0 && voltage <= 3.2)
+  {
     // Battery is low (<= 3.2V)
-    if (!lowBatteryScreenShown) {
+    if (!lowBatteryScreenShown)
+    {
       // Show low battery screen once
 #if DEBUG_LEVEL
-      if (Serial) {
+      if (Serial)
+      {
         Serial.println("Low battery detected: " + String(voltage, 2) + "V");
         Serial.println("Displaying low battery screen...");
       }
 #endif
-      
+
       epd_poweron();
       epd_clear();
       drawLowBatteryScreen();
       epd_draw_grayscale_image(epd_full_screen(), framebuffer);
       epd_poweroff_all();
-      
+
       // Mark that we've shown the screen
       lowBatteryScreenShown = true;
 #if DEBUG_LEVEL
-      if (Serial) {
+      if (Serial)
+      {
         Serial.println("Low battery screen displayed. Going to sleep...");
       }
 #endif
-    } else {
+    }
+    else
+    {
       // Already shown, just sleep without redrawing
 #if DEBUG_LEVEL
-      if (Serial) {
+      if (Serial)
+      {
         Serial.println("Low battery screen already shown. Going to sleep...");
       }
 #endif
     }
-    
+
     // Go to sleep - will wake up again later to check battery
     BeginSleep();
     return; // Exit setup() early
   }
-  
+
   // Battery is OK (> 3.2V), reset the flag and proceed normally
-  if (voltage > 3.2) {
+  if (voltage > 3.2)
+  {
     lowBatteryScreenShown = false; // Reset flag when battery is good
   }
-  
-  if (StartWiFi() == WL_CONNECTED) {
+
+  if (StartWiFi() == WL_CONNECTED)
+  {
     // Validate and geocode location if needed (after setup mode has finished)
     // Returns: 0 = success, 1 = API key invalid (401), 2 = other error (invalid location, etc.)
     int locationResult = validateAndGeocodeLocation();
-    
-    if (locationResult == 1) {
+
+    if (locationResult == 1)
+    {
       // API key is invalid - show error screen
 #if DEBUG_LEVEL
-      if (Serial) {
+      if (Serial)
+      {
         Serial.println("OpenWeatherMap API key is invalid");
       }
 #endif
@@ -530,19 +588,23 @@ void setup() {
       drawInvalidAPIKeyScreen();
       epd_draw_grayscale_image(epd_full_screen(), framebuffer);
       epd_poweroff_all();
-      
+
       // Go to sleep - user needs to enter setup mode to fix API key
 #if DEBUG_LEVEL
-      if (Serial) {
+      if (Serial)
+      {
         Serial.println("Entering deep sleep due to invalid API key...");
       }
 #endif
       BeginSleep();
       return; // Exit setup() early
-    } else if (locationResult == 2) {
+    }
+    else if (locationResult == 2)
+    {
       // Location is invalid and geocoding failed - show error screen
 #if DEBUG_LEVEL
-      if (Serial) {
+      if (Serial)
+      {
         Serial.println("Location validation failed. Displaying error screen...");
       }
 #endif
@@ -552,10 +614,11 @@ void setup() {
       drawInvalidLocationScreen();
       epd_draw_grayscale_image(epd_full_screen(), framebuffer);
       epd_poweroff_all();
-      
+
       // Go to sleep - user needs to enter setup mode to fix location
 #if DEBUG_LEVEL
-      if (Serial) {
+      if (Serial)
+      {
         Serial.println("Entering deep sleep due to invalid location...");
       }
 #endif
@@ -563,32 +626,40 @@ void setup() {
       return; // Exit setup() early
     }
     // locationResult == 0 means success, continue normally
-    
+
     // Check if RTC is initialized (timestamp >= year 2000)
     time_t now = time(NULL);
     bool rtcSet = (now >= 946684800); // Unix timestamp for 2000-01-01
-    
+
     bool WakeUp = false;
-    if (rtcSet) {
+    if (rtcSet)
+    {
       // RTC is set - check if current time is within wake hours
       UpdateLocalTime();
-      
+
       // SleepHour == 24 means "never sleep" (always wake)
-      if (settings.SleepHour == 24) {
+      if (settings.SleepHour == 24)
+      {
         WakeUp = true; // Always wake regardless of hour
-      } else {
+      }
+      else
+      {
         // Handle wake hours that span midnight (e.g., 22:00 to 06:00)
-        if (settings.WakeupHour > settings.SleepHour) {
+        if (settings.WakeupHour > settings.SleepHour)
+        {
           // Spanning midnight: wake if hour >= WakeupHour OR hour <= SleepHour
           WakeUp = (CurrentHour >= settings.WakeupHour || CurrentHour <= settings.SleepHour);
-        } else {
+        }
+        else
+        {
           // Normal range: wake if hour is between WakeupHour and SleepHour
           WakeUp = (CurrentHour >= settings.WakeupHour && CurrentHour <= settings.SleepHour);
         }
       }
-      
+
 #if DEBUG_LEVEL
-      if (Serial) {
+      if (Serial)
+      {
         Serial.print("Current hour: ");
         Serial.println(CurrentHour);
         Serial.print("Wake hours: ");
@@ -599,68 +670,83 @@ void setup() {
         Serial.println(WakeUp ? "true" : "false");
       }
 #endif
-    } else {
+    }
+    else
+    {
       // RTC not initialized - always fetch weather to set time from API
 #if DEBUG_LEVEL
-      if (Serial) {
+      if (Serial)
+      {
         Serial.println("RTC not set, fetching weather to set time from API...");
       }
 #endif
       WakeUp = true;
     }
-    
-    if (WakeUp) {
+
+    if (WakeUp)
+    {
 #if DEBUG_LEVEL
-      if (Serial) {
+      if (Serial)
+      {
         Serial.println("Within wake hours, fetching weather...");
       }
 #endif
       byte Attempts = 1;
       int weatherResult = 2; // 0 = success, 1 = API key invalid, 2 = other error
       WiFiClient client;
-      while (weatherResult != 0 && Attempts <= 2) {
-        if (weatherResult != 0) {
+      while (weatherResult != 0 && Attempts <= 2)
+      {
+        if (weatherResult != 0)
+        {
           weatherResult = obtainWeatherData(client);
         }
         Attempts++;
       }
 #if DEBUG_LEVEL
-      if (Serial) {
+      if (Serial)
+      {
         Serial.println("Received weather data...");
       }
 #endif
-      if (weatherResult == 0) {
+      if (weatherResult == 0)
+      {
         // Update time strings after RTC was set from API
         UpdateLocalTime();
-        
+
         StopWiFi();
         epd_poweron();
         epd_clear();
-        
+
 #if DEBUG_LEVEL
-        if (Serial) {
+        if (Serial)
+        {
           Serial.println("Drawing weather display...");
         }
 #endif
         DisplayWeather();
-        
+
         // Update display - render framebuffer to screen
 #if DEBUG_LEVEL
-        if (Serial) {
+        if (Serial)
+        {
           Serial.println("Updating display...");
         }
 #endif
         epd_draw_grayscale_image(epd_full_screen(), framebuffer);
         epd_poweroff_all();
 #if DEBUG_LEVEL
-        if (Serial) {
+        if (Serial)
+        {
           Serial.println("Display updated successfully");
         }
 #endif
-      } else if (weatherResult == 1) {
+      }
+      else if (weatherResult == 1)
+      {
         // API key is invalid - show error screen
 #if DEBUG_LEVEL
-        if (Serial) {
+        if (Serial)
+        {
           Serial.println("OpenWeatherMap API key is invalid");
         }
 #endif
@@ -670,10 +756,13 @@ void setup() {
         drawInvalidAPIKeyScreen();
         epd_draw_grayscale_image(epd_full_screen(), framebuffer);
         epd_poweroff_all();
-      } else {
+      }
+      else
+      {
         // Other error - show generic error message
 #if DEBUG_LEVEL
-        if (Serial) {
+        if (Serial)
+        {
           Serial.println("Failed to receive weather data");
         }
 #endif
@@ -683,11 +772,14 @@ void setup() {
         epd_draw_grayscale_image(epd_full_screen(), framebuffer);
         epd_poweroff_all();
       }
-    } else {
+    }
+    else
+    {
       // Outside wake hours - skip weather fetch and display update to save power
       // Leave current display image in place and go back to sleep
 #if DEBUG_LEVEL
-      if (Serial) {
+      if (Serial)
+      {
         Serial.println("Outside wake hours, skipping weather fetch and display update");
       }
 #endif
@@ -695,14 +787,16 @@ void setup() {
       // No EPD operations - current image remains on screen
     }
   }
-  else {
+  else
+  {
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.println("WiFi or time setup failed");
       Serial.println("Displaying WiFi connection error...");
     }
 #endif
-    
+
     epd_poweron();
     epd_clear();
     drawWiFiErrorScreen();
@@ -716,49 +810,55 @@ void setup() {
  * Main display function - renders complete weather information to framebuffer.
  * Layout includes: location/date, current conditions, 5-day forecast, 24-hour graph, and status bar.
  */
-void DisplayWeather() {
+void DisplayWeather()
+{
 #if IS_ESP32_S3
   // ESP32-S3: Check that arrays are allocated
-  if (!WxConditions || !WxHourlyForecast || !WxDailyForecast) {
+  if (!WxConditions || !WxHourlyForecast || !WxDailyForecast)
+  {
     return;
   }
 #endif
-  
+
   // Clear framebuffer to white
   memset(framebuffer, 0xFF, EPD_WIDTH * EPD_HEIGHT / 2);
-  
+
   // Get current time from RTC for forecast day labels
   time_t now = time(NULL);
   struct tm *timeInfo = localtime(&now);
-  if (timeInfo == NULL) {
+  if (timeInfo == NULL)
+  {
     // Fallback if RTC not set
     struct tm defaultTime = {0};
     timeInfo = &defaultTime;
   }
-  
+
   // Render display sections in order (back to front)
-  drawLocationDate(settings.City, Date_str);                                    // Top right: city and date
-  drawCurrentConditions(WxConditions, wifi_signal);                    // Center: current weather
-  drawForecast(WxDailyForecast, max_daily_readings, timeInfo);         // Top row: 5-day forecast
-  drawOutlookGraph(WxHourlyForecast, max_hourly_readings, timeInfo);   // Bottom: 24-hour graph
-  drawStatusBar("", Time_str, wifi_signal, readBatteryVoltage());       // Bottom: status indicators
+  drawLocationDate(settings.City, Date_str);                         // Top right: city and date
+  drawCurrentConditions(WxConditions, wifi_signal);                  // Center: current weather
+  drawForecast(WxDailyForecast, max_daily_readings, timeInfo);       // Top row: 5-day forecast
+  drawOutlookGraph(WxHourlyForecast, max_hourly_readings, timeInfo); // Bottom: 24-hour graph
+  drawStatusBar("", Time_str, wifi_signal, readBatteryVoltage());    // Bottom: status indicators
 }
 
 /**
  * Convert Unix timestamp to formatted time string.
  * Format depends on unit system (Metric = 24-hour, Imperial = 12-hour with AM/PM).
- * 
+ *
  * @param unix_time Unix timestamp
  * @return Formatted time string (e.g., "14:30" or "2:30PM")
  */
-String ConvertUnixTime(int unix_time) {
+String ConvertUnixTime(int unix_time)
+{
   time_t tm = unix_time;
   struct tm *now_tm = localtime(&tm);
   char output[40];
-  if (String(settings.Units) == "M") {
+  if (String(settings.Units) == "M")
+  {
     strftime(output, sizeof(output), "%H:%M %d/%m/%y", now_tm); // 24-hour format
   }
-  else {
+  else
+  {
     strftime(output, sizeof(output), "%I:%M%P %m/%d/%y", now_tm); // 12-hour with AM/PM
   }
   return output;
@@ -768,21 +868,25 @@ String ConvertUnixTime(int unix_time) {
  * Parse OpenWeatherMap One Call API 3.0 JSON response.
  * Extracts current weather, hourly forecasts (48h), and daily forecasts (8 days).
  * Sets RTC time from API response timestamp.
- * 
+ *
  * @param json WiFiClient stream containing JSON response
  * @return true if parsing successful, false on error
  */
-bool DecodeWeather(WiFiClient& json) {
+bool DecodeWeather(WiFiClient &json)
+{
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.print(F("\nDeserializing One Call API 3.0 json... "));
   }
 #endif
   auto doc = DynamicJsonDocument(64 * 1024);
   DeserializationError error = deserializeJson(doc, json);
-  if (error) {
+  if (error)
+  {
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.print(F("deserializeJson() failed: "));
       Serial.println(error.c_str());
     }
@@ -791,137 +895,161 @@ bool DecodeWeather(WiFiClient& json) {
   }
   JsonObject root = doc.as<JsonObject>();
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println(" Decoding One Call API 3.0 data");
   }
 #endif
-  
+
   // Parse current weather conditions
   JsonObject current = root["current"];
-  if (!current.isNull()) {
+  if (!current.isNull())
+  {
     int timezoneOffset = doc["timezone_offset"] | 0;
     time_t apiTime = current["dt"].as<int>(); // Unix timestamp (UTC)
-    
+
     // Store current weather data
-    WxConditions[0].FTimezone   = timezoneOffset;
-    WxConditions[0].Dt         = apiTime;
-    WxConditions[0].Sunrise     = current["sunrise"].as<int>();
-    WxConditions[0].Sunset      = current["sunset"].as<int>();
+    WxConditions[0].FTimezone = timezoneOffset;
+    WxConditions[0].Dt = apiTime;
+    WxConditions[0].Sunrise = current["sunrise"].as<int>();
+    WxConditions[0].Sunset = current["sunset"].as<int>();
     WxConditions[0].Temperature = current["temp"].as<float>();
-    WxConditions[0].FeelsLike   = current["feels_like"].as<float>();
-    WxConditions[0].Pressure    = current["pressure"].as<int>();
-    WxConditions[0].Humidity     = current["humidity"].as<int>();
-    WxConditions[0].Cloudcover   = current["clouds"].as<int>();
-    WxConditions[0].Visibility   = current["visibility"].as<int>();
-    WxConditions[0].Windspeed    = current["wind_speed"].as<float>();
-    WxConditions[0].Winddir      = current["wind_deg"].as<float>();
-    WxConditions[0].Forecast0    = current["weather"][0]["description"].as<const char*>();
-    WxConditions[0].Icon         = current["weather"][0]["icon"].as<const char*>();
-    
+    WxConditions[0].FeelsLike = current["feels_like"].as<float>();
+    WxConditions[0].Pressure = current["pressure"].as<int>();
+    WxConditions[0].Humidity = current["humidity"].as<int>();
+    WxConditions[0].Cloudcover = current["clouds"].as<int>();
+    WxConditions[0].Visibility = current["visibility"].as<int>();
+    WxConditions[0].Windspeed = current["wind_speed"].as<float>();
+    WxConditions[0].Winddir = current["wind_deg"].as<float>();
+    WxConditions[0].Forecast0 = current["weather"][0]["description"].as<const char *>();
+    WxConditions[0].Icon = current["weather"][0]["icon"].as<const char *>();
+
     // Synchronize RTC with API time
     SetRTCTimeFromAPI(apiTime, timezoneOffset);
-    
+
     // Get today's high/low from first daily forecast entry
     JsonArray daily = root["daily"];
-    if (daily.size() > 0) {
+    if (daily.size() > 0)
+    {
       JsonObject firstDay = daily[0];
       JsonObject temp = firstDay["temp"];
       WxConditions[0].High = temp["max"].as<float>();
-      WxConditions[0].Low  = temp["min"].as<float>();
+      WxConditions[0].Low = temp["min"].as<float>();
     }
   }
-  
+
   // Parse hourly forecasts (48 hours) - used for 24-hour graph
   JsonArray hourly = root["hourly"];
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.print(F("\nReceiving Hourly Forecast - "));
   }
 #endif
-  for (byte r = 0; r < max_hourly_readings && r < hourly.size(); r++) {
-    WxHourlyForecast[r].Dt          = hourly[r]["dt"].as<int>();
+  for (byte r = 0; r < max_hourly_readings && r < hourly.size(); r++)
+  {
+    WxHourlyForecast[r].Dt = hourly[r]["dt"].as<int>();
     WxHourlyForecast[r].Temperature = hourly[r]["temp"].as<float>();
-    WxHourlyForecast[r].Low         = hourly[r]["temp"].as<float>(); // Hourly has single temperature value
-    WxHourlyForecast[r].High        = hourly[r]["temp"].as<float>();
-    WxHourlyForecast[r].Pressure    = hourly[r]["pressure"].as<float>();
-    WxHourlyForecast[r].Humidity    = hourly[r]["humidity"].as<float>();
-    WxHourlyForecast[r].Icon        = hourly[r]["weather"][0]["icon"].as<const char*>();
-    WxHourlyForecast[r].Cloudcover  = hourly[r]["clouds"].as<int>();
-    WxHourlyForecast[r].Pop         = hourly[r]["pop"].as<float>(); // Probability of precipitation (0.0-1.0)
-    WxHourlyForecast[r].Windspeed   = hourly[r]["wind_speed"].as<float>();
-    WxHourlyForecast[r].Winddir     = hourly[r]["wind_deg"].as<float>();
-    
+    WxHourlyForecast[r].Low = hourly[r]["temp"].as<float>(); // Hourly has single temperature value
+    WxHourlyForecast[r].High = hourly[r]["temp"].as<float>();
+    WxHourlyForecast[r].Pressure = hourly[r]["pressure"].as<float>();
+    WxHourlyForecast[r].Humidity = hourly[r]["humidity"].as<float>();
+    WxHourlyForecast[r].Icon = hourly[r]["weather"][0]["icon"].as<const char *>();
+    WxHourlyForecast[r].Cloudcover = hourly[r]["clouds"].as<int>();
+    WxHourlyForecast[r].Pop = hourly[r]["pop"].as<float>(); // Probability of precipitation (0.0-1.0)
+    WxHourlyForecast[r].Windspeed = hourly[r]["wind_speed"].as<float>();
+    WxHourlyForecast[r].Winddir = hourly[r]["wind_deg"].as<float>();
+
     // Parse optional precipitation fields (hourly API uses "1h" key)
-    if (hourly[r]["rain"].isNull() || hourly[r]["rain"]["1h"].isNull()) {
+    if (hourly[r]["rain"].isNull() || hourly[r]["rain"]["1h"].isNull())
+    {
       WxHourlyForecast[r].Rainfall = 0.0;
-    } else {
+    }
+    else
+    {
       WxHourlyForecast[r].Rainfall = hourly[r]["rain"]["1h"].as<float>();
     }
-    if (hourly[r]["snow"].isNull() || hourly[r]["snow"]["1h"].isNull()) {
+    if (hourly[r]["snow"].isNull() || hourly[r]["snow"]["1h"].isNull())
+    {
       WxHourlyForecast[r].Snowfall = 0.0;
-    } else {
+    }
+    else
+    {
       WxHourlyForecast[r].Snowfall = hourly[r]["snow"]["1h"].as<float>();
     }
   }
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println(String(hourly.size()) + " periods received");
   }
 #endif
-  
+
   // Parse daily forecasts (8 days) - used for 5-day forecast display
   JsonArray daily = root["daily"];
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.print(F("\nReceiving Daily Forecast - "));
   }
 #endif
-  for (byte r = 0; r < max_daily_readings && r < daily.size(); r++) {
+  for (byte r = 0; r < max_daily_readings && r < daily.size(); r++)
+  {
     JsonObject day = daily[r];
     JsonObject temp = day["temp"]; // Daily forecast has temp object with min/max/day/night
-    
-    WxDailyForecast[r].Dt          = day["dt"].as<int>();
+
+    WxDailyForecast[r].Dt = day["dt"].as<int>();
     WxDailyForecast[r].Temperature = temp["day"].as<float>(); // Daytime average temperature
-    WxDailyForecast[r].Low         = temp["min"].as<float>();
-    WxDailyForecast[r].High        = temp["max"].as<float>();
-    WxDailyForecast[r].Pressure    = day["pressure"].as<float>();
-    WxDailyForecast[r].Humidity    = day["humidity"].as<float>();
-    WxDailyForecast[r].Icon        = day["weather"][0]["icon"].as<const char*>();
-    WxDailyForecast[r].Cloudcover  = day["clouds"].as<int>();
-    WxDailyForecast[r].Pop         = day["pop"].as<float>(); // Probability of precipitation
-    WxDailyForecast[r].Windspeed   = day["wind_speed"].as<float>();
-    WxDailyForecast[r].Winddir     = day["wind_deg"].as<float>();
-    WxDailyForecast[r].Sunrise     = day["sunrise"].as<int>();
-    WxDailyForecast[r].Sunset      = day["sunset"].as<int>();
-    
+    WxDailyForecast[r].Low = temp["min"].as<float>();
+    WxDailyForecast[r].High = temp["max"].as<float>();
+    WxDailyForecast[r].Pressure = day["pressure"].as<float>();
+    WxDailyForecast[r].Humidity = day["humidity"].as<float>();
+    WxDailyForecast[r].Icon = day["weather"][0]["icon"].as<const char *>();
+    WxDailyForecast[r].Cloudcover = day["clouds"].as<int>();
+    WxDailyForecast[r].Pop = day["pop"].as<float>(); // Probability of precipitation
+    WxDailyForecast[r].Windspeed = day["wind_speed"].as<float>();
+    WxDailyForecast[r].Winddir = day["wind_deg"].as<float>();
+    WxDailyForecast[r].Sunrise = day["sunrise"].as<int>();
+    WxDailyForecast[r].Sunset = day["sunset"].as<int>();
+
     // Parse optional precipitation (daily API provides total for the day, not per-hour)
-    if (day["rain"].isNull()) {
+    if (day["rain"].isNull())
+    {
       WxDailyForecast[r].Rainfall = 0.0;
-    } else {
+    }
+    else
+    {
       WxDailyForecast[r].Rainfall = day["rain"].as<float>();
     }
-    if (day["snow"].isNull()) {
+    if (day["snow"].isNull())
+    {
       WxDailyForecast[r].Snowfall = 0.0;
-    } else {
+    }
+    else
+    {
       WxDailyForecast[r].Snowfall = day["snow"].as<float>();
     }
   }
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println(String(daily.size()) + " days received");
   }
 #endif
-  
+
   // Calculate pressure trend: compare today's pressure with tomorrow's
   // "+" = rising, "-" = falling, "=" = stable
-  if (daily.size() >= 2) {
+  if (daily.size() >= 2)
+  {
     float pressure_trend = WxDailyForecast[0].Pressure - WxDailyForecast[1].Pressure;
     pressure_trend = ((int)(pressure_trend * 10)) / 10.0; // Round to 0.1 hPa
     WxConditions[0].Trend = "=";
-    if (pressure_trend > 0)  WxConditions[0].Trend = "+";
-    if (pressure_trend < 0)  WxConditions[0].Trend = "-";
+    if (pressure_trend > 0)
+      WxConditions[0].Trend = "+";
+    if (pressure_trend < 0)
+      WxConditions[0].Trend = "-";
   }
-  
+
   return true;
 }
 
@@ -929,34 +1057,38 @@ bool DecodeWeather(WiFiClient& json) {
  * Fetch weather data from OpenWeatherMap One Call API 3.0.
  * Requests current weather, hourly forecast (48h), and daily forecast (8 days).
  * Excludes minutely forecast and alerts to reduce response size.
- * 
+ *
  * @param client WiFiClient for HTTP connection
  * @return 0 if data received and parsed successfully, 1 if API key invalid (401), 2 for other errors
  */
-int obtainWeatherData(WiFiClient & client) {
+int obtainWeatherData(WiFiClient &client)
+{
   const String units = (String(settings.Units) == "M" ? "metric" : "imperial");
   client.stop(); // Close any existing connection
-  
+
   HTTPClient http;
   // Build API request URI
-  String uri = "/data/3.0/onecall?lat=" + String(settings.Latitude) + "&lon=" + String(settings.Longitude) + 
-               "&exclude=minutely,alerts&appid=" + String(settings.apikey) + 
+  String uri = "/data/3.0/onecall?lat=" + String(settings.Latitude) + "&lon=" + String(settings.Longitude) +
+               "&exclude=minutely,alerts&appid=" + String(settings.apikey) +
                "&units=" + units + "&lang=" + String(settings.Language);
-  
-  const char* server = "api.openweathermap.org";
+
+  const char *server = "api.openweathermap.org";
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.print("Connecting: ");
     Serial.print(String(server) + uri);
     Serial.println();
   }
 #endif
-  
+
   http.begin(client, server, 80, uri); // HTTP port 80 (use 443 + WiFiClientSecure for HTTPS)
   int httpCode = http.GET();
-  
-  if (httpCode == HTTP_CODE_OK) {
-    if (!DecodeWeather(http.getStream())) {
+
+  if (httpCode == HTTP_CODE_OK)
+  {
+    if (!DecodeWeather(http.getStream()))
+    {
       http.end();
       return 2; // Parsing error
     }
@@ -964,17 +1096,20 @@ int obtainWeatherData(WiFiClient & client) {
     http.end();
     return 0; // Success
   }
-  else {
+  else
+  {
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.printf("connection failed, http error code %i %s\n", httpCode, http.errorToString(httpCode));
     }
 #endif
     client.stop();
     http.end();
-    
+
     // Check if error is due to invalid API key (HTTP 401 Unauthorized)
-    if (httpCode == 401) {
+    if (httpCode == 401)
+    {
       return 1; // API key invalid
     }
     return 2; // Other error
@@ -984,58 +1119,66 @@ int obtainWeatherData(WiFiClient & client) {
 /**
  * Read current time from RTC and update display strings.
  * Extracts hour/minute/second for wake hours check and formats time/date for display.
- * 
+ *
  * @return true if RTC is set and time was read successfully
  */
-boolean UpdateLocalTime() {
+boolean UpdateLocalTime()
+{
   time_t now = time(NULL);
-  if (now < 946684800) { // Unix timestamp for 2000-01-01 - RTC not initialized
+  if (now < 946684800)
+  { // Unix timestamp for 2000-01-01 - RTC not initialized
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.println("RTC not set yet, waiting for API time...");
     }
 #endif
     return false;
   }
-  
+
   // Calculate local time by adding timezone offset to UTC time
   // timezoneOffset: positive = east of UTC (ahead), negative = west of UTC (behind)
   time_t local_time = now + globalTimezoneOffset;
-  struct tm *timeinfo = gmtime(&local_time);  // Use gmtime since we've already applied offset
-  if (timeinfo == NULL) {
+  struct tm *timeinfo = gmtime(&local_time); // Use gmtime since we've already applied offset
+  if (timeinfo == NULL)
+  {
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.println("Failed to get time from RTC");
     }
 #endif
     return false;
   }
-  
+
   // Extract time components for wake hours logic
   CurrentHour = timeinfo->tm_hour;
-  CurrentMin  = timeinfo->tm_min;
-  CurrentSec  = timeinfo->tm_sec;
+  CurrentMin = timeinfo->tm_min;
+  CurrentSec = timeinfo->tm_sec;
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println(timeinfo, "%a %b %d %Y   %H:%M:%S");
   }
 #endif
-  
+
   // Format date string: "Saturday, November 22" (full names, no year)
   char weekday_full[20], month_full[20], day_output[30], time_output[30], update_time[30];
   strftime(weekday_full, sizeof(weekday_full), "%A", timeinfo);
   strftime(month_full, sizeof(month_full), "%B", timeinfo);
   sprintf(day_output, "%s, %s %d", weekday_full, month_full, timeinfo->tm_mday);
-  
+
   // Format time string based on unit system
-  if (String(settings.Units) == "M") {
+  if (String(settings.Units) == "M")
+  {
     strftime(update_time, sizeof(update_time), "%H:%M:%S", timeinfo); // 24-hour format
   }
-  else {
+  else
+  {
     strftime(update_time, sizeof(update_time), "%r", timeinfo); // 12-hour with AM/PM
   }
   sprintf(time_output, "%s", update_time);
-  
+
   Date_str = day_output;
   Time_str = time_output;
   return true;
@@ -1043,40 +1186,41 @@ boolean UpdateLocalTime() {
 
 /**
  * Read battery voltage from ADC pin using ESP32 ADC calibration.
- * 
+ *
  * ESP32 (5 Button dev kit): GPIO36 (ADC1_CH0) with voltage divider (6.566x scaling)
  * ESP32-S3 (3 Button dev kit): GPIO14 with voltage divider (0.5x scaling, then 2x multiplier)
- * 
+ *
  * Uses eFuse Vref calibration for accurate voltage readings.
- * 
+ *
  * @return Battery voltage in millivolts, or 0 if reading unavailable
  */
-uint32_t readBatteryVoltage() {
+uint32_t readBatteryVoltage()
+{
 #if IS_ESP32_S3
   // ESP32-S3: GPIO14 with 0.5x voltage divider, then 2x multiplier, plus calibration
-  const int batteryPin = 14;  // GPIO14 = Battery ADC on ESP32-S3
-  
+  const int batteryPin = 14; // GPIO14 = Battery ADC on ESP32-S3
+
   // Calibration multiplier - adjust based on actual vs measured voltage
   // Calculated from: actual_voltage / measured_voltage
   // Example: if actual is 3.952V and measured is 3.4V, multiplier = 1.162
   const float CALIBRATION_MULTIPLIER = 1.162f;
-  
+
   // Characterize ADC with calibration values
   // ESP32-S3 supports up to ADC_ATTEN_DB_11 (not ADC_ATTEN_DB_12 like ESP32)
   esp_adc_cal_characteristics_t adc_chars;
   esp_adc_cal_value_t val_type = esp_adc_cal_characterize(
-    ADC_UNIT_1, 
-    ADC_ATTEN_DB_11,  // ESP32-S3 maximum attenuation (3.0V full scale)
-    ADC_WIDTH_BIT_12, 
-    1100,  // Default Vref in mV
-    &adc_chars
-  );
-  
+      ADC_UNIT_1,
+      ADC_ATTEN_DB_11, // ESP32-S3 maximum attenuation (3.0V full scale)
+      ADC_WIDTH_BIT_12,
+      1100, // Default Vref in mV
+      &adc_chars);
+
   // Use eFuse Vref if available (more accurate than default)
-  if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
+  if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF)
+  {
     vref = adc_chars.vref;
   }
-  
+
   // Read ADC value and convert to voltage using calibrated reference
   // Voltage divider scales by 0.5x, so battery voltage = ADC voltage * 2
   // For ATTEN_DB_11 on ESP32-S3, full scale is approximately 3.0V
@@ -1084,45 +1228,46 @@ uint32_t readBatteryVoltage() {
   // Then: batteryVoltage = adcVoltage * 2.0 (to account for 0.5x divider)
   int rawValue = analogRead(batteryPin);
   float adcVoltage = (rawValue / 4095.0) * 3.0 * (vref / 1100.0);
-  float voltage = adcVoltage * 2.0;  // Account for 0.5x voltage divider
-  
+  float voltage = adcVoltage * 2.0; // Account for 0.5x voltage divider
+
   // Apply calibration multiplier to correct for hardware variations
   voltage = voltage * CALIBRATION_MULTIPLIER;
 #else
   // ESP32: GPIO36 with 6.566x scaling
-  const int batteryPin = 36;  // GPIO36 = ADC1_CH0 on ESP32
-  
+  const int batteryPin = 36; // GPIO36 = ADC1_CH0 on ESP32
+
   // Characterize ADC with calibration values
   esp_adc_cal_characteristics_t adc_chars;
   esp_adc_cal_value_t val_type = esp_adc_cal_characterize(
-    ADC_UNIT_1, 
-    ADC_ATTEN_DB_12, 
-    ADC_WIDTH_BIT_12, 
-    1100,  // Default Vref in mV
-    &adc_chars
-  );
-  
+      ADC_UNIT_1,
+      ADC_ATTEN_DB_12,
+      ADC_WIDTH_BIT_12,
+      1100, // Default Vref in mV
+      &adc_chars);
+
   // Use eFuse Vref if available (more accurate than default)
-  if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
+  if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF)
+  {
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.printf("eFuse Vref:%u mV\n", adc_chars.vref);
     }
 #endif
     vref = adc_chars.vref;
   }
-  
+
   // Read ADC value and convert to voltage using calibrated reference
   // Formula: voltage = (rawValue / 4096.0) * 6.566 * (vref / 1000.0)
   float voltage = analogRead(batteryPin) / 4096.0 * 6.566 * (vref / 1000.0);
 #endif
-  
-  if (voltage <= 1.0) {
+
+  if (voltage <= 1.0)
+  {
     // Voltage too low indicates battery monitoring hardware not available
     return 0;
   }
-  
+
   // Return in millivolts for easier comparison
   return (uint32_t)(voltage * 1000);
 }
-

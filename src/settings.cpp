@@ -1,6 +1,6 @@
 /**
  * Settings Management
- * 
+ *
  * Handles loading and saving user settings to/from EEPROM using ESP32 Preferences.
  * On first boot, initializes with default values.
  */
@@ -18,48 +18,54 @@ Settings settings;
 // Default settings
 // Note: Using regular initialization instead of C99 designators for C++ compatibility
 const Settings defaultSettings = {
-  "SSID",                       // ssid
-  "Password",                   // password
-  "APIKEY",                     // OpenWeatherMap apikey
-  "Chicago,IL,US",              // Location String
-  "41.8832",                    // Latitude
-  "87.6324",                    // Longitude
-  "en",                         // Language
-  "M",                          // Units
-  60,                           // SleepDuration
-  0,                            // WakeupHour
-  24,                           // SleepHour
-  SETTINGS_MAGIC                // magic
+    "Relax IoT",                        // ssid
+    "sapopepe!!!",                      // password
+    "cb72b97f96c8a2c27c9a5d217cd3374f", // OpenWeatherMap apikey
+    "Buenos Aires,Buenos Aires,AR",     // Location String
+    "-34.6037",                         // Latitude
+    "-58.3816",                         // Longitude
+    "en",                               // Language
+    "M",                                // Units
+    60,                                 // SleepDuration
+    0,                                  // WakeupHour
+    24,                                 // SleepHour
+    SETTINGS_MAGIC                      // magic
 };
 
 /**
  * Initialize settings system.
  * Checks if settings exist in EEPROM, if not creates with defaults.
  */
-void initSettings() {
+void initSettings()
+{
   preferences.begin("weather", false); // Open preferences namespace "weather" in read-write mode
-  
+
   // Check if settings exist by reading magic number
   uint32_t magic = preferences.getUInt("magic", 0);
-  
-  if (magic != SETTINGS_MAGIC) {
+
+  if (magic != SETTINGS_MAGIC)
+  {
     // Settings don't exist or are invalid - initialize with defaults
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.println("Settings not found in EEPROM. Initializing with defaults...");
     }
 #endif
     resetSettingsToDefaults();
-  } else {
+  }
+  else
+  {
     // Settings exist - load them
 #if DEBUG_LEVEL
-    if (Serial) {
+    if (Serial)
+    {
       Serial.println("Loading settings from EEPROM...");
     }
 #endif
     loadSettings();
   }
-  
+
   preferences.end();
 }
 
@@ -67,9 +73,10 @@ void initSettings() {
  * Load settings from EEPROM.
  * @return true if settings were loaded successfully
  */
-bool loadSettings() {
+bool loadSettings()
+{
   preferences.begin("weather", true); // Open in read-only mode
-  
+
   // Load all settings (use default if key doesn't exist)
   String ssidStr = preferences.getString("ssid", defaultSettings.ssid);
   String passwordStr = preferences.getString("password", defaultSettings.password);
@@ -79,7 +86,7 @@ bool loadSettings() {
   String lonStr = preferences.getString("Longitude", defaultSettings.Longitude);
   String langStr = preferences.getString("Language", defaultSettings.Language);
   String unitsStr = preferences.getString("Units", defaultSettings.Units);
-  
+
   // Copy strings to settings structure
   strncpy(settings.ssid, ssidStr.c_str(), sizeof(settings.ssid) - 1);
   settings.ssid[sizeof(settings.ssid) - 1] = '\0';
@@ -97,16 +104,17 @@ bool loadSettings() {
   settings.Language[sizeof(settings.Language) - 1] = '\0';
   strncpy(settings.Units, unitsStr.c_str(), sizeof(settings.Units) - 1);
   settings.Units[sizeof(settings.Units) - 1] = '\0';
-  
+
   settings.SleepDuration = preferences.getLong("SleepDuration", defaultSettings.SleepDuration);
   settings.WakeupHour = preferences.getInt("WakeupHour", defaultSettings.WakeupHour);
   settings.SleepHour = preferences.getInt("SleepHour", defaultSettings.SleepHour);
   settings.magic = preferences.getUInt("magic", SETTINGS_MAGIC);
-  
+
   preferences.end();
-  
+
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println("Settings loaded from EEPROM");
   }
 #endif
@@ -116,9 +124,10 @@ bool loadSettings() {
 /**
  * Save current settings to EEPROM.
  */
-void saveSettings() {
+void saveSettings()
+{
   preferences.begin("weather", false); // Open in read-write mode
-  
+
   // Save all settings
   preferences.putString("ssid", settings.ssid);
   preferences.putString("password", settings.password);
@@ -132,11 +141,12 @@ void saveSettings() {
   preferences.putInt("WakeupHour", settings.WakeupHour);
   preferences.putInt("SleepHour", settings.SleepHour);
   preferences.putUInt("magic", SETTINGS_MAGIC);
-  
+
   preferences.end();
-  
+
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println("Settings saved to EEPROM");
   }
 #endif
@@ -145,18 +155,18 @@ void saveSettings() {
 /**
  * Reset settings to defaults and save to EEPROM.
  */
-void resetSettingsToDefaults() {
+void resetSettingsToDefaults()
+{
   // Copy defaults to current settings
   memcpy(&settings, &defaultSettings, sizeof(Settings));
-  
+
   // Save to EEPROM
   saveSettings();
-  
+
 #if DEBUG_LEVEL
-  if (Serial) {
+  if (Serial)
+  {
     Serial.println("Settings reset to defaults and saved");
   }
 #endif
 }
-
-
